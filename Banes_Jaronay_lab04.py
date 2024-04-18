@@ -4,20 +4,23 @@ import imutils
 import os
 
 def process_images(image):
-    gray_image = cv2.split(image)[0]
-    gray_image = cv2.GaussianBlur(gray_image, (15, 15), 0)
+    
+    lab = cv2.cvtColor(image, cv2.COLOR_BGR2LAB)
+    gray_image = lab[:,:,1]
 
-    (T, threshold_image) = cv2.threshold(gray_image, 25, 255, cv2.THRESH_BINARY_INV)
+    blurred_gray_image = cv2.GaussianBlur(gray_image, (15, 15), 0)
 
-    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (8, 8))
-    morph_image = cv2.morphologyEx(threshold_image, cv2.MORPH_OPEN, kernel)
+    (T, bottle_threshold) = cv2.threshold(blurred_gray_image,127,255,cv2.THRESH_BINARY+cv2.THRESH_OTSU)
+
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (15, 15))
+    morph_image = cv2.morphologyEx(bottle_threshold, cv2.MORPH_OPEN, kernel)
 
     contours = cv2.findContours(morph_image.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     contours = imutils.grab_contours(contours)
     heights = []
-    for contour in contours:
-        x, y, w, h = cv2.boundingRect(contour)
-        heights.append(h)
+    largest_contour = max(contours, key=cv2.contourArea)
+    x, y, w, h = cv2.boundingRect(largest_contour)
+    heights.append(h)
     avg_height = sum(heights) / len(heights)
     return avg_height
 
