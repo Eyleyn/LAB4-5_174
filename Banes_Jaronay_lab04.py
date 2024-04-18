@@ -2,6 +2,7 @@ import cv2
 from matplotlib import pyplot as plt
 import imutils
 import os
+import numpy as np
 
 def process_images(image):
     
@@ -33,6 +34,7 @@ def mapped_height(amount_directories):
             image = cv2.resize(image, (500, 500))
             avg_height = process_images(image) 
             height_mapping[avg_height] = os.path.basename(directory)
+    print(f"Guessed amount for {directory}: {height_mapping}")
     return height_mapping
 
 def guess_image(guess_directories, height_mapping):
@@ -41,9 +43,35 @@ def guess_image(guess_directories, height_mapping):
             image_path = os.path.join(directory, filename)
             image = cv2.imread(image_path)
             image = cv2.resize(image, (500, 500))
-        avg_height = process_images(image)
-        closest_height = min(height_mapping.keys(), key=lambda x: abs(x - avg_height))
-        print(f"Guessed amount for {directory}: {height_mapping[closest_height]}")
+            avg_height = process_images(image)
+            print(f"Guessed amount for {avg_height}")
+            # Perform interpolation
+            heights = list(height_mapping.keys())
+            labels = list(height_mapping.values())
+            
+            # Sort labels based on heights
+            sorted_labels = [x for _,x in sorted(zip(heights, labels))]
+            
+            # Find the two closest heights for interpolation
+            idx = np.argsort(heights)
+            closest_idx = np.searchsorted(heights, avg_height, side="left", sorter=idx)
+            if closest_idx == 0:
+                interp_idx = [closest_idx, closest_idx + 1]
+            elif closest_idx == len(heights):
+                interp_idx = [closest_idx - 1, closest_idx]
+            else:
+                interp_idx = [closest_idx - 1, closest_idx]
+            
+            # Perform ordinal interpolation
+            interp_labels = sorted_labels[interp_idx[0]:interp_idx[1]+1]
+            ordinal_values = np.arange(len(interp_labels))
+            predicted_label = np.interp(avg_height, [heights[interp_idx[0]], heights[interp_idx[1]]], ordinal_values)
+            
+            # Map the interpolated ordinal value back to the original label
+            predicted_label = interp_labels[int(round(predicted_label))]
+            
+            print(f"Guessed amount for {directory}: {predicted_label}")
+
 
 def main():
 
