@@ -41,7 +41,7 @@ def process_images(image):
 
 def mapped_height(amount_directories):
 
-    #Empty height mapping list
+    #Empty height mapping dictionary
     height_mapping = {}
 
     #Iterate over the amount directories
