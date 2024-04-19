@@ -30,32 +30,51 @@ def process_images(image):
     #Extract contours
     contours = imutils.grab_contours(find_contours)
 
-
-
     #Find the largest contour
     largest_contour = max(contours, key=cv2.contourArea)
 
     #Computes the heigth of the largest contour 
     x, y, w, h = cv2.boundingRect(largest_contour)
 
-   
-    
+    #return the height    
     return h
 
 def mapped_height(amount_directories):
+
+    #Empty height mapping list
     height_mapping = {}
+
+    #Iterate over the amount directories
     for directory in amount_directories:
+
         #Empty height list
         heights = []
+
+        #Iterate over each file in the directory
         for filename in os.listdir(directory):
+
+            #Get the path of the image
             image_path = os.path.join(directory, filename)
+
+            #Reads the image
             image = cv2.imread(image_path)
+
+            #Resize the image
             image = cv2.resize(image, (500, 500))
+
+            #Get the heigth of the liquid
             h = process_images(image)
+
             #Append the h(height) to the list
             heights.append(h)
+        
+        #Calculate the average height
         avg_height = sum(heights) / len(heights)
+
+        # Mapped the height 
         height_mapping[avg_height] = os.path.basename(directory)
+   
+    #Return the height mapping
     return height_mapping
 
 def guess_image(guess_directories, height_mapping):
@@ -70,36 +89,55 @@ def guess_image(guess_directories, height_mapping):
             heights.append(h)
         avg_height = sum(heights) / len(heights)
 
-            # Perform interpolation
-        heights = list(height_mapping.keys())
-        labels = list(height_mapping.values())
+        # List the heights and labels
+        heights_list= list(height_mapping.keys())
+        labels_list = list(height_mapping.values())
         
         # Sort labels based on heights
-        sorted_labels = [x for _,x in sorted(zip(heights, labels))]
+        sorted_labels = [x for y,x in sorted(zip(heights_list, labels_list))]
         
-        # Find the two closest heights for interpolation
-        idx = np.argsort(heights)
-        closest_idx = np.searchsorted(heights, avg_height, side="left", sorter=idx)
-        if closest_idx == 0:
-            interp_idx = [closest_idx, closest_idx + 1]
-        elif closest_idx == len(heights):
-            interp_idx = [closest_idx - 1, closest_idx]
+        # Get the index of the heights list
+        index = np.argsort(heights_list)
+
+        #Find the closest index to average height
+        closest_index = np.searchsorted(heights_list, avg_height, side="left", sorter=index)
+
+        # If the average height is in 0 index
+        if closest_index == 0:
+
+            #Interpolate between the first 2 elements
+            interp_index = [closest_index, closest_index + 1]
+
+        # If the average height is in the end
+        elif closest_index == len(heights_list):
+
+            #Interpolate between the last 2 elements
+            interp_index = [closest_index - 1, closest_index]
+        
+        # If the average height is in between elements
         else:
-            interp_idx = [closest_idx - 1, closest_idx]
+
+            # #Interpolate between the elements
+            interp_index = [closest_index - 1, closest_index]
         
-        # Perform ordinal interpolation
-        interp_labels = sorted_labels[interp_idx[0]:interp_idx[1]+1]
+        #Extract the labels between the 2 elements
+        interp_labels = sorted_labels[interp_index[0]:interp_index[1]+1]
+
+        #Extract the indices of the labels
         ordinal_values = np.arange(len(interp_labels))
-        predicted_label = np.interp(avg_height, [heights[interp_idx[0]], heights[interp_idx[1]]], ordinal_values)
+
+        #Get the interpolated ordinal value
+        interp_value = np.interp(avg_height, [heights_list[interp_index[0]], heights_list[interp_index[1]]], ordinal_values)
         
-        # Map the interpolated ordinal value back to the original label
-        predicted_label = interp_labels[int(round(predicted_label))]
+        #Predict the label
+        predicted_label = interp_labels[int(round(interp_value))]
         
-        print(f"Guessed amount for {directory}: {predicted_label}")
+        #Display the results
+        print(f"Guessed amount for {os.path.basename(directory)}: {predicted_label}")
 
 
 def main():
-
+    #Amount directories
     amount_directories = [
         'C:\\Users\\Jewy\\Desktop\\CMSC 174\\lab04\\50ml',
         'C:\\Users\\Jewy\\Desktop\\CMSC 174\\lab04\\100ml',
@@ -109,14 +147,18 @@ def main():
         'C:\\Users\\Jewy\\Desktop\\CMSC 174\\lab04\\300ml',
         'C:\\Users\\Jewy\\Desktop\\CMSC 174\\lab04\\350ml',
     ]
+
+    # Get the height mapping
     height_mapping = mapped_height (amount_directories)
 
+    # Unkown directories
     guess_directories = [
         'C:\\Users\\Jewy\\Desktop\\CMSC 174\\lab04\\guess\\A',
         'C:\\Users\\Jewy\\Desktop\\CMSC 174\\lab04\\guess\\B',
         'C:\\Users\\Jewy\\Desktop\\CMSC 174\\lab04\\guess\\C',
     ]
 
+    # Guess the unknown amount
     guess_image (guess_directories, height_mapping)
 
 if __name__ == "__main__":
