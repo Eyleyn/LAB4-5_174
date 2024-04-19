@@ -68,7 +68,7 @@ def guess_image(guess_directories, height_mapping):
             # Map the interpolated ordinal value back to the original label
             predicted_label = interp_labels[int(round(predicted_label))]
             
-            print(f"Guessed amount for {directory}: {predicted_label}")
+        print(f"Guessed amount for {directory}: {predicted_label}")
 
 
 def main():
