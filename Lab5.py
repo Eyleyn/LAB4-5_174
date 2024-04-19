@@ -1,9 +1,190 @@
-#Reference: https://kediarahul.medium.com/panorama-stitching-stitch-multiple-images-using-opencv-python-c-875a1d11236d
+#Based: https://kediarahul.medium.com/panorama-stitching-stitch-multiple-images-using-opencv-python-c-875a1d11236d
+import os
 import cv2
+import math
 import numpy as np
 
-# Load the images
-image_paths = [
+def ReadImage(ImageFolderPath):
+    Images = []
+    if os.path.isdir(ImageFolderPath):
+        ImageNames = os.listdir(ImageFolderPath)
+        ImageNames_Split = [[int(os.path.splitext(os.path.basename(ImageName))[0]), ImageName] for ImageName in ImageNames]
+        ImageNames_Split = sorted(ImageNames_Split, key=lambda x:x[0])
+        ImageNames_Sorted = [ImageNames_Split[i][1] for i in range(len(ImageNames_Split))]
+        
+        for i in range(len(ImageNames_Sorted)):
+            ImageName = ImageNames_Sorted[i]
+            InputImage = cv2.imread(os.path.join(ImageFolderPath, ImageName))
+            
+            if InputImage is None:
+                print("Not able to read image: {}".format(ImageName))
+                exit(0)
+
+            Images.append(InputImage)
+            
+    else:
+        print("\nEnter valid Image Folder Path.\n")
+        
+    if len(Images) < 2:
+        print("\nNot enough images found. Please provide 2 or more images.\n")
+        exit(1)
+    
+    return Images
+
+    
+def FindMatches(BaseImage, SecImage):
+    Sift = cv2.SIFT_create()
+    BaseImage_kp, BaseImage_des = Sift.detectAndCompute(cv2.cvtColor(BaseImage, cv2.COLOR_BGR2GRAY), None)
+    SecImage_kp, SecImage_des = Sift.detectAndCompute(cv2.cvtColor(SecImage, cv2.COLOR_BGR2GRAY), None)
+
+    BF_Matcher = cv2.BFMatcher()
+    InitialMatches = BF_Matcher.knnMatch(BaseImage_des, SecImage_des, k=2)
+
+    GoodMatches = []
+    for m, n in InitialMatches:
+        if m.distance < 0.75 * n.distance:
+            GoodMatches.append([m])
+
+    return GoodMatches, BaseImage_kp, SecImage_kp
+
+
+def FindHomography(Matches, BaseImage_kp, SecImage_kp):
+    if len(Matches) < 4:
+        print("\nNot enough matches found between the images.\n")
+        exit(0)
+
+    BaseImage_pts = []
+    SecImage_pts = []
+    for Match in Matches:
+        BaseImage_pts.append(BaseImage_kp[Match[0].queryIdx].pt)
+        SecImage_pts.append(SecImage_kp[Match[0].trainIdx].pt)
+
+    BaseImage_pts = np.float32(BaseImage_pts)
+    SecImage_pts = np.float32(SecImage_pts)
+
+    (HomographyMatrix, Status) = cv2.findHomography(SecImage_pts, BaseImage_pts, cv2.RANSAC, 4.0)
+
+    return HomographyMatrix, Status
+
+    
+def GetNewFrameSizeAndMatrix(HomographyMatrix, Sec_ImageShape, Base_ImageShape):
+    (Height, Width) = Sec_ImageShape
+    
+    InitialMatrix = np.array([[0, Width - 1, Width - 1, 0],
+                              [0, 0, Height - 1, Height - 1],
+                              [1, 1, 1, 1]])
+    
+    FinalMatrix = np.dot(HomographyMatrix, InitialMatrix)
+
+    [x, y, c] = FinalMatrix
+    x = np.divide(x, c)
+    y = np.divide(y, c)
+
+    min_x, max_x = int(round(min(x))), int(round(max(x)))
+    min_y, max_y = int(round(min(y))), int(round(max(y)))
+
+    New_Width = max_x
+    New_Height = max_y
+    Correction = [0, 0]
+    if min_x < 0:
+        New_Width -= min_x
+        Correction[0] = abs(min_x)
+    if min_y < 0:
+        New_Height -= min_y
+        Correction[1] = abs(min_y)
+    
+    if New_Width < Base_ImageShape[1] + Correction[0]:
+        New_Width = Base_ImageShape[1] + Correction[0]
+    if New_Height < Base_ImageShape[0] + Correction[1]:
+        New_Height = Base_ImageShape[0] + Correction[1]
+
+    x = np.add(x, Correction[0])
+    y = np.add(y, Correction[1])
+    OldInitialPoints = np.float32([[0, 0],
+                                   [Width - 1, 0],
+                                   [Width - 1, Height - 1],
+                                   [0, Height - 1]])
+    NewFinalPonts = np.float32(np.array([x, y]).transpose())
+
+    HomographyMatrix = cv2.getPerspectiveTransform(OldInitialPoints, NewFinalPonts)
+    
+    return [New_Height, New_Width], Correction, HomographyMatrix
+
+
+def StitchImages(BaseImage, SecImage):
+    Matches, BaseImage_kp, SecImage_kp = FindMatches(BaseImage, SecImage)
+    HomographyMatrix, Status = FindHomography(Matches, BaseImage_kp, SecImage_kp)
+    NewFrameSize, Correction, HomographyMatrix = GetNewFrameSizeAndMatrix(HomographyMatrix, SecImage.shape[:2], BaseImage.shape[:2])
+
+    SecImage_Transformed = cv2.warpPerspective(SecImage, HomographyMatrix, (NewFrameSize[1], NewFrameSize[0]))
+    BaseImage_Transformed = np.zeros((NewFrameSize[0], NewFrameSize[1], 3), dtype=np.uint8)
+    BaseImage_Transformed[Correction[1]:Correction[1]+BaseImage.shape[0], Correction[0]:Correction[0]+BaseImage.shape[1]] = BaseImage
+
+    StitchedImage = cv2.bitwise_or(SecImage_Transformed, BaseImage_Transformed)
+
+    return StitchedImage
+
+
+def Convert_xy(x, y):
+    global center, f
+
+    xt = ( f * np.tan( (x - center[0]) / f ) ) + center[0]
+    yt = ( (y - center[1]) / np.cos( (x - center[0]) / f ) ) + center[1]
+    
+    return xt, yt
+
+
+def ProjectOntoCylinder(InitialImage):
+    global w, h, center, f
+    h, w = InitialImage.shape[:2]
+    center = [w // 2, h // 2]
+    f = 1100
+    
+    TransformedImage = np.zeros(InitialImage.shape, dtype=np.uint8)
+    
+    AllCoordinates_of_ti =  np.array([np.array([i, j]) for i in range(w) for j in range(h)])
+    ti_x = AllCoordinates_of_ti[:, 0]
+    ti_y = AllCoordinates_of_ti[:, 1]
+    
+    ii_x, ii_y = Convert_xy(ti_x, ti_y)
+
+    ii_tl_x = ii_x.astype(int)
+    ii_tl_y = ii_y.astype(int)
+
+    GoodIndices = (ii_tl_x >= 0) * (ii_tl_x <= (w-2)) * \
+                  (ii_tl_y >= 0) * (ii_tl_y <= (h-2))
+
+    ti_x = ti_x[GoodIndices]
+    ti_y = ti_y[GoodIndices]
+    
+    ii_x = ii_x[GoodIndices]
+    ii_y = ii_y[GoodIndices]
+
+    ii_tl_x = ii_tl_x[GoodIndices]
+    ii_tl_y = ii_tl_y[GoodIndices]
+
+    dx = ii_x - ii_tl_x
+    dy = ii_y - ii_tl_y
+
+    weight_tl = (1.0 - dx) * (1.0 - dy)
+    weight_tr = (dx)       * (1.0 - dy)
+    weight_bl = (1.0 - dx) * (dy)
+    weight_br = (dx)       * (dy)
+    
+    TransformedImage[ti_y, ti_x, :] = ( weight_tl[:, None] * InitialImage[ii_tl_y,     ii_tl_x,     :] ) + \
+                                      ( weight_tr[:, None] * InitialImage[ii_tl_y,     ii_tl_x + 1, :] ) + \
+                                      ( weight_bl[:, None] * InitialImage[ii_tl_y + 1, ii_tl_x,     :] ) + \
+                                      ( weight_br[:, None] * InitialImage[ii_tl_y + 1, ii_tl_x + 1, :] )
+
+    min_x = min(ti_x)
+    TransformedImage = TransformedImage[:, min_x : -min_x, :]
+
+    return TransformedImage, ti_x-min_x, ti_y
+
+
+if __name__ == "__main__":
+    
+    image_paths = [
     'C:\\Users\\User\\Desktop\\KOMSAI\\UP202004905\\4TH_YEAR_NOTES\\2nd_SEM\\CMSC 174 Sec 2\\LAB\\lab05\\data\\1.jpg',
     'C:\\Users\\User\\Desktop\\KOMSAI\\UP202004905\\4TH_YEAR_NOTES\\2nd_SEM\\CMSC 174 Sec 2\\LAB\\lab05\\data\\2.jpg',
     'C:\\Users\\User\\Desktop\\KOMSAI\\UP202004905\\4TH_YEAR_NOTES\\2nd_SEM\\CMSC 174 Sec 2\\LAB\\lab05\\data\\3.jpg',
@@ -13,49 +194,21 @@ image_paths = [
     'C:\\Users\\User\\Desktop\\KOMSAI\\UP202004905\\4TH_YEAR_NOTES\\2nd_SEM\\CMSC 174 Sec 2\\LAB\\lab05\\data\\7.jpg',
     'C:\\Users\\User\\Desktop\\KOMSAI\\UP202004905\\4TH_YEAR_NOTES\\2nd_SEM\\CMSC 174 Sec 2\\LAB\\lab05\\data\\8.jpg',
     'C:\\Users\\User\\Desktop\\KOMSAI\\UP202004905\\4TH_YEAR_NOTES\\2nd_SEM\\CMSC 174 Sec 2\\LAB\\lab05\\data\\9.jpg',
-]
+    ]
+    
+    # Define the target width and height for resizing
+    target_width = 800
+    target_height = 600
+    
+    Images = [cv2.resize(cv2.imread(image_path), (target_width, target_height)) for image_path in image_paths]
+    
+    BaseImage, _, _ = ProjectOntoCylinder(Images[0])
+    for i in range(1, len(Images)):
+        StitchedImage = StitchImages(BaseImage, Images[i])
 
-sift = cv2.SIFT_create()
+        BaseImage = StitchedImage.copy()    
 
-stitched_image = None
-
-for i in range(len(image_paths) - 1):
-    # Load the current and next images
-    image1 = cv2.imread(image_paths[i])
-    image2 = cv2.imread(image_paths[i + 1])
-
-    # Convert images to grayscale
-    gray1 = cv2.cvtColor(image1, cv2.COLOR_BGR2GRAY)
-    gray2 = cv2.cvtColor(image2, cv2.COLOR_BGR2GRAY)
-
-    keypoints1, descriptors1 = sift.detectAndCompute(gray1, None)
-    keypoints2, descriptors2 = sift.detectAndCompute(gray2, None)
-
-    # Initialize the feature matcher using brute-force matching
-    bf = cv2.BFMatcher()
-
-    matches = bf.match(descriptors1, descriptors2)
-
-    num_matches = 50
-    matches = sorted(matches, key=lambda x: x.distance)[:num_matches]
-
-    src_points = np.float32([keypoints1[match.queryIdx].pt for match in matches]).reshape(-1, 1, 2)
-    dst_points = np.float32([keypoints2[match.trainIdx].pt for match in matches]).reshape(-1, 1, 2)
-
-    # Estimate the homography matrix
-    homography, _ = cv2.findHomography(src_points, dst_points, cv2.RANSAC, 5.0)
-
-    # Warp the first image using the homography
-    result = cv2.warpPerspective(image1, homography, (image2.shape[1] + image1.shape[1], image2.shape[0]))
-
-    # Blend the warped image with the second image using alpha blending
-    result[0:image2.shape[0], 0:image2.shape[1]] = image2
-
-    if stitched_image is None:
-        stitched_image = result
-    else:
-        stitched_image = cv2.addWeighted(stitched_image, 0.5, result, 0.5, 0)
-
-cv2.imshow('Stitched Image', stitched_image)
-cv2.waitKey(0)
-cv2.destroyAllWindows()
+    # Resize the final stitched image
+    final_stitched_image = cv2.resize(BaseImage, (target_width, target_height))
+    
+    cv2.imwrite("Stitched_Panorama.png", final_stitched_image)
