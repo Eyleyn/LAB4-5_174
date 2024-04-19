@@ -34,7 +34,6 @@ def mapped_height(amount_directories):
             image = cv2.resize(image, (500, 500))
             avg_height = process_images(image) 
             height_mapping[avg_height] = os.path.basename(directory)
-    print(f"Guessed amount for {directory}: {height_mapping}")
     return height_mapping
 
 def guess_image(guess_directories, height_mapping):
@@ -44,7 +43,6 @@ def guess_image(guess_directories, height_mapping):
             image = cv2.imread(image_path)
             image = cv2.resize(image, (500, 500))
             avg_height = process_images(image)
-            print(f"Guessed amount for {avg_height}")
             # Perform interpolation
             heights = list(height_mapping.keys())
             labels = list(height_mapping.values())
