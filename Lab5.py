@@ -1,4 +1,4 @@
-#Based: https://kediarahul.medium.com/panorama-stitching-stitch-multiple-images-using-opencv-python-c-875a1d11236d
+#Reference: https://kediarahul.medium.com/panorama-stitching-stitch-multiple-images-using-opencv-python-c-875a1d11236d
 import os
 import cv2
 import math
@@ -15,19 +15,8 @@ def ReadImage(ImageFolderPath):
         for i in range(len(ImageNames_Sorted)):
             ImageName = ImageNames_Sorted[i]
             InputImage = cv2.imread(os.path.join(ImageFolderPath, ImageName))
-            
-            if InputImage is None:
-                print("Not able to read image: {}".format(ImageName))
-                exit(0)
 
             Images.append(InputImage)
-            
-    else:
-        print("\nEnter valid Image Folder Path.\n")
-        
-    if len(Images) < 2:
-        print("\nNot enough images found. Please provide 2 or more images.\n")
-        exit(1)
     
     return Images
 
@@ -211,4 +200,6 @@ if __name__ == "__main__":
     # Resize the final stitched image
     final_stitched_image = cv2.resize(BaseImage, (target_width, target_height))
     
-    cv2.imwrite("Stitched_Panorama.png", final_stitched_image)
+    smoothed_image = cv2.GaussianBlur(final_stitched_image, (5, 5), 0)
+    
+    cv2.imwrite("Stitched_Panorama.png", smoothed_image)
