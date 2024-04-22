@@ -1,4 +1,5 @@
 #Reference: https://kediarahul.medium.com/panorama-stitching-stitch-multiple-images-using-opencv-python-c-875a1d11236d
+#Based: https://kediarahul.medium.com/panorama-stitching-stitch-multiple-images-using-opencv-python-c-875a1d11236d
 import os
 import cv2
 import math
@@ -38,10 +39,6 @@ def FindMatches(BaseImage, SecImage):
 
 
 def FindHomography(Matches, BaseImage_kp, SecImage_kp):
-    if len(Matches) < 4:
-        print("\nNot enough matches found between the images.\n")
-        exit(0)
-
     BaseImage_pts = []
     SecImage_pts = []
     for Match in Matches:
@@ -109,9 +106,18 @@ def StitchImages(BaseImage, SecImage):
     BaseImage_Transformed = np.zeros((NewFrameSize[0], NewFrameSize[1], 3), dtype=np.uint8)
     BaseImage_Transformed[Correction[1]:Correction[1]+BaseImage.shape[0], Correction[0]:Correction[0]+BaseImage.shape[1]] = BaseImage
 
-    StitchedImage = cv2.bitwise_or(SecImage_Transformed, BaseImage_Transformed)
+    # Create a mask to identify non-black pixels in the transformed secondary image
+    SecImage_Transformed_gray = cv2.cvtColor(SecImage_Transformed, cv2.COLOR_BGR2GRAY)
+    _, mask = cv2.threshold(SecImage_Transformed_gray, 1, 255, cv2.THRESH_BINARY)
+    mask_inv = cv2.bitwise_not(mask)
+
+    # Use the mask to blend the images
+    fg = cv2.bitwise_and(SecImage_Transformed, SecImage_Transformed, mask=mask)
+    bg = cv2.bitwise_and(BaseImage_Transformed, BaseImage_Transformed, mask=mask_inv)
+    StitchedImage = cv2.add(fg, bg)
 
     return StitchedImage
+
 
 
 def Convert_xy(x, y):
@@ -187,19 +193,19 @@ if __name__ == "__main__":
     
     # Define the target width and height for resizing
     target_width = 800
-    target_height = 600
+    target_height = 800
     
     Images = [cv2.resize(cv2.imread(image_path), (target_width, target_height)) for image_path in image_paths]
+    Images[2] = cv2.resize(Images[2], (6020, 6000)) 
     
     BaseImage, _, _ = ProjectOntoCylinder(Images[0])
     for i in range(1, len(Images)):
         StitchedImage = StitchImages(BaseImage, Images[i])
-
         BaseImage = StitchedImage.copy()    
 
     # Resize the final stitched image
     final_stitched_image = cv2.resize(BaseImage, (target_width, target_height))
     
-    smoothed_image = cv2.GaussianBlur(final_stitched_image, (5, 5), 0)
+    #smoothed_image = cv2.GaussianBlur(final_stitched_image, (5, 5), 0)
     
-    cv2.imwrite("Stitched_Panorama.png", smoothed_image)
+    cv2.imwrite("Banes_Jaronay_lab05_stitch.png", final_stitched_image)
