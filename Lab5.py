@@ -5,23 +5,6 @@ import cv2
 import math
 import numpy as np
 
-def ReadImage(ImageFolderPath):
-    Images = []
-    if os.path.isdir(ImageFolderPath):
-        ImageNames = os.listdir(ImageFolderPath)
-        ImageNames_Split = [[int(os.path.splitext(os.path.basename(ImageName))[0]), ImageName] for ImageName in ImageNames]
-        ImageNames_Split = sorted(ImageNames_Split, key=lambda x:x[0])
-        ImageNames_Sorted = [ImageNames_Split[i][1] for i in range(len(ImageNames_Split))]
-        
-        for i in range(len(ImageNames_Sorted)):
-            ImageName = ImageNames_Sorted[i]
-            InputImage = cv2.imread(os.path.join(ImageFolderPath, ImageName))
-
-            Images.append(InputImage)
-    
-    return Images
-
-    
 def FindMatches(BaseImage, SecImage):
     Sift = cv2.SIFT_create()
     BaseImage_kp, BaseImage_des = Sift.detectAndCompute(cv2.cvtColor(BaseImage, cv2.COLOR_BGR2GRAY), None)
