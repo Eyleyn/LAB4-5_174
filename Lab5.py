@@ -120,78 +120,64 @@ def StitchImages(BaseImage, SecImage):
 
 
 
-def Convert_xy(x, y):
-    global center, f
-
-    xt = ( f * np.tan( (x - center[0]) / f ) ) + center[0]
-    yt = ( (y - center[1]) / np.cos( (x - center[0]) / f ) ) + center[1]
-    
+def Convert_xy(x, y, center, f):
+    xt = (f * np.tan((x - center[0]) / f)) + center[0]
+    yt = ((y - center[1]) / np.cos((x - center[0]) / f)) + center[1]
     return xt, yt
 
 
 def ProjectOntoCylinder(InitialImage):
-    global w, h, center, f
     h, w = InitialImage.shape[:2]
     center = [w // 2, h // 2]
     f = 1100
     
     TransformedImage = np.zeros(InitialImage.shape, dtype=np.uint8)
     
-    AllCoordinates_of_ti =  np.array([np.array([i, j]) for i in range(w) for j in range(h)])
-    ti_x = AllCoordinates_of_ti[:, 0]
-    ti_y = AllCoordinates_of_ti[:, 1]
+    for i in range(w):
+        for j in range(h):
+            xt, yt = Convert_xy(i, j, center, f)
+            ii_tl_x = int(xt)
+            ii_tl_y = int(yt)
+            
+            if ii_tl_x >= 0 and ii_tl_x <= w - 2 and ii_tl_y >= 0 and ii_tl_y <= h - 2:
+                dx = xt - ii_tl_x
+                dy = yt - ii_tl_y
+
+                weight_tl = (1.0 - dx) * (1.0 - dy)
+                weight_tr = dx * (1.0 - dy)
+                weight_bl = (1.0 - dx) * dy
+                weight_br = dx * dy
+
+                TransformedImage[j, i] = (weight_tl * InitialImage[ii_tl_y, ii_tl_x] +
+                                          weight_tr * InitialImage[ii_tl_y, ii_tl_x + 1] +
+                                          weight_bl * InitialImage[ii_tl_y + 1, ii_tl_x] +
+                                          weight_br * InitialImage[ii_tl_y + 1, ii_tl_x + 1])
+
+    min_x = np.min(np.where(TransformedImage.sum(axis=2).sum(axis=0) != 0))
+    max_x = np.max(np.where(TransformedImage.sum(axis=2).sum(axis=0) != 0))
+
+    TransformedImage = TransformedImage[:, min_x:max_x]
     
-    ii_x, ii_y = Convert_xy(ti_x, ti_y)
-
-    ii_tl_x = ii_x.astype(int)
-    ii_tl_y = ii_y.astype(int)
-
-    GoodIndices = (ii_tl_x >= 0) * (ii_tl_x <= (w-2)) * \
-                  (ii_tl_y >= 0) * (ii_tl_y <= (h-2))
-
-    ti_x = ti_x[GoodIndices]
-    ti_y = ti_y[GoodIndices]
-    
-    ii_x = ii_x[GoodIndices]
-    ii_y = ii_y[GoodIndices]
-
-    ii_tl_x = ii_tl_x[GoodIndices]
-    ii_tl_y = ii_tl_y[GoodIndices]
-
-    dx = ii_x - ii_tl_x
-    dy = ii_y - ii_tl_y
-
-    weight_tl = (1.0 - dx) * (1.0 - dy)
-    weight_tr = (dx)       * (1.0 - dy)
-    weight_bl = (1.0 - dx) * (dy)
-    weight_br = (dx)       * (dy)
-    
-    TransformedImage[ti_y, ti_x, :] = ( weight_tl[:, None] * InitialImage[ii_tl_y,     ii_tl_x,     :] ) + \
-                                      ( weight_tr[:, None] * InitialImage[ii_tl_y,     ii_tl_x + 1, :] ) + \
-                                      ( weight_bl[:, None] * InitialImage[ii_tl_y + 1, ii_tl_x,     :] ) + \
-                                      ( weight_br[:, None] * InitialImage[ii_tl_y + 1, ii_tl_x + 1, :] )
-
-    min_x = min(ti_x)
-    TransformedImage = TransformedImage[:, min_x : -min_x, :]
-
-    return TransformedImage, ti_x-min_x, ti_y
+    return TransformedImage, np.arange(min_x, max_x), np.arange(h)
 
 
-if __name__ == "__main__":
-    
+
+
+def main():
+
     image_paths = [
-    'C:\\Users\\User\\Desktop\\KOMSAI\\UP202004905\\4TH_YEAR_NOTES\\2nd_SEM\\CMSC 174 Sec 2\\LAB\\lab05\\data\\1.jpg',
-    'C:\\Users\\User\\Desktop\\KOMSAI\\UP202004905\\4TH_YEAR_NOTES\\2nd_SEM\\CMSC 174 Sec 2\\LAB\\lab05\\data\\2.jpg',
-    'C:\\Users\\User\\Desktop\\KOMSAI\\UP202004905\\4TH_YEAR_NOTES\\2nd_SEM\\CMSC 174 Sec 2\\LAB\\lab05\\data\\3.jpg',
-    'C:\\Users\\User\\Desktop\\KOMSAI\\UP202004905\\4TH_YEAR_NOTES\\2nd_SEM\\CMSC 174 Sec 2\\LAB\\lab05\\data\\4.jpg',
-    'C:\\Users\\User\\Desktop\\KOMSAI\\UP202004905\\4TH_YEAR_NOTES\\2nd_SEM\\CMSC 174 Sec 2\\LAB\\lab05\\data\\5.jpg',
-    'C:\\Users\\User\\Desktop\\KOMSAI\\UP202004905\\4TH_YEAR_NOTES\\2nd_SEM\\CMSC 174 Sec 2\\LAB\\lab05\\data\\6.jpg',
-    'C:\\Users\\User\\Desktop\\KOMSAI\\UP202004905\\4TH_YEAR_NOTES\\2nd_SEM\\CMSC 174 Sec 2\\LAB\\lab05\\data\\7.jpg',
-    'C:\\Users\\User\\Desktop\\KOMSAI\\UP202004905\\4TH_YEAR_NOTES\\2nd_SEM\\CMSC 174 Sec 2\\LAB\\lab05\\data\\8.jpg',
-    'C:\\Users\\User\\Desktop\\KOMSAI\\UP202004905\\4TH_YEAR_NOTES\\2nd_SEM\\CMSC 174 Sec 2\\LAB\\lab05\\data\\9.jpg',
+    'C:\\Users\\Jewy\\Documents\\LAB4-5_174\\data\\1.jpg',
+    'C:\\Users\\Jewy\\Documents\\LAB4-5_174\\data\\2.jpg',
+    'C:\\Users\\Jewy\\Documents\\LAB4-5_174\\data\\3.jpg',
+    'C:\\Users\\Jewy\\Documents\\LAB4-5_174\\data\\4.jpg',
+    'C:\\Users\\Jewy\\Documents\\LAB4-5_174\\data\\5.jpg',
+    'C:\\Users\\Jewy\\Documents\\LAB4-5_174\\data\\6.jpg',
+    'C:\\Users\\Jewy\\Documents\\LAB4-5_174\\data\\7.jpg',
+    'C:\\Users\\Jewy\\Documents\\LAB4-5_174\\data\\8.jpg',
+    'C:\\Users\\Jewy\\Documents\\LAB4-5_174\\data\\9.jpg',
     ]
-    
-    # Define the target width and height for resizing
+
+      # Define the target width and height for resizing
     target_width = 800
     target_height = 800
     
@@ -204,8 +190,11 @@ if __name__ == "__main__":
         BaseImage = StitchedImage.copy()    
 
     # Resize the final stitched image
-    final_stitched_image = cv2.resize(BaseImage, (target_width, target_height))
+    final_stitched_image = cv2.resize(BaseImage, (800, 800))
     
     #smoothed_image = cv2.GaussianBlur(final_stitched_image, (5, 5), 0)
     
     cv2.imwrite("Banes_Jaronay_lab05_stitch.png", final_stitched_image)
+
+if __name__ == "__main__":
+    main()
