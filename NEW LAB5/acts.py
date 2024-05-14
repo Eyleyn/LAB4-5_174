@@ -13,13 +13,13 @@ def find_matches(image1, image2):
 
     # Detect keypoints and compute descriptors for the base and secondary image
     image1_keypoints, image1_descriptors = sift.detectAndCompute(cv2.cvtColor(image1, cv2.COLOR_BGR2GRAY), None)
-    image2_keypoints, image1_descriptors = sift.detectAndCompute(cv2.cvtColor(image2, cv2.COLOR_BGR2GRAY), None)
+    image2_keypoints, image2_descriptors = sift.detectAndCompute(cv2.cvtColor(image2, cv2.COLOR_BGR2GRAY), None)
     
     # Create a Brute-Force Matcher object
     bf_matcher = cv2.BFMatcher()
 
     # Perform K-Nearest Neighbors (KNN) matching
-    Initialmatches = bf_matcher.knnMatch(image1_descriptors, image1_descriptors, k=3)
+    Initialmatches = bf_matcher.knnMatch(image1_descriptors, image2_descriptors, k=3)
 
     # Filter out good matches
     good_matches = []
@@ -36,11 +36,11 @@ def find_homography(matches, image1_keypoints, image2_keypoints):
     #Not sure if may reshape pa or nah
     
     # Extract keypoints list 
-    image1_points = np.float32([image1_keypoints[match[0].queryIdx].pt for match in matches]).reshape(-1, 1, 2)
-    image2_points = np.float32([image2_keypoints[match[0].trainIdx].pt for match in matches]).reshape(-1, 1, 2) 
+    image1_points = np.float32([image1_keypoints[m[0].queryIdx].pt for m in matches])
+    image2_points = np.float32([image2_keypoints[m[0].trainIdx].pt for m in matches])
 
     # Use RANSAC algorithm to estimate the homography 
-    homography, _ = cv2.find_homography(image1_points, image2_points, cv2.RANSAC, 5.0)
+    homography, _ = cv2.findHomography(image2_points, image1_points, cv2.RANSAC, 5.0)
 
     # Return the computed homography  
     return homography
@@ -141,65 +141,29 @@ def stitch_images(image1, image2):
     # Return the final stitched image
     return stitched_image
 
-def capture_frames(video_path, output_folder):
-    # Open the video file
-    cap = cv2.VideoCapture(video_path)
-    
-    # Initialize variables
-    frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    fps = int(cap.get(cv2.CAP_PROP_FPS))
-    interval = fps // 2  # Capture frames at every half second
-    
-    # Create output folder if it doesn't exist
-    if not os.path.exists(output_folder):
-        os.makedirs(output_folder)
-    
-    # Read and capture frames at specified intervals
-    count = 0
-    while count < frame_count:
-        ret, frame = cap.read()
-        if not ret:
-            break
-        
-        if count % interval == 0:
-            cv2.imwrite(os.path.join(output_folder, f"frame_{count}.jpg"), frame)
-        
-        count += 1
-    
-    # Release video capture
-    cap.release()
-
 def main():
-    # Path to the video file
-    video = 'spike.mp4'
+    # Load the images
+    image1 = cv2.imread('C:\\Users\\User\\Desktop\\KOMSAI\\UP202004905\\4TH_YEAR_NOTES\\2nd_SEM\\CMSC 174 Sec 2\\LAB\\lab05\\captured_frames2\\1.jpg')
+    image2 = cv2.imread('C:\\Users\\User\\Desktop\\KOMSAI\\UP202004905\\4TH_YEAR_NOTES\\2nd_SEM\\CMSC 174 Sec 2\\LAB\\lab05\\captured_frames2\\2.jpg')
+    image3 = cv2.imread('C:\\Users\\User\\Desktop\\KOMSAI\\UP202004905\\4TH_YEAR_NOTES\\2nd_SEM\\CMSC 174 Sec 2\\LAB\\lab05\\captured_frames2\\3.jpg')
+    image4 = cv2.imread('C:\\Users\\User\\Desktop\\KOMSAI\\UP202004905\\4TH_YEAR_NOTES\\2nd_SEM\\CMSC 174 Sec 2\\LAB\\lab05\\captured_frames2\\4.jpg')
+    image5 = cv2.imread('C:\\Users\\User\\Desktop\\KOMSAI\\UP202004905\\4TH_YEAR_NOTES\\2nd_SEM\\CMSC 174 Sec 2\\LAB\\lab05\\captured_frames2\\5.jpg')
+    image6 = cv2.imread('C:\\Users\\User\\Desktop\\KOMSAI\\UP202004905\\4TH_YEAR_NOTES\\2nd_SEM\\CMSC 174 Sec 2\\LAB\\lab05\\captured_frames2\\6.jpg')
 
-    # Output folder for captured frames
-    frames_folder = 'captured_frames'
+    stitched_image = stitch_images(image1, image2)
+    cv2.imwrite('Seamless Stitch1.jpg', stitched_image)
 
-    # Capture frames at specific intervals
-    capture_frames(video, frames_folder)
+    stitched_image2 = stitch_images(image3, image4)
+    cv2.imwrite('Seamless Stitch2.jpg', stitched_image2)
 
-    # Images directory
-    image_directory = "C:\\Users\\Dnts\\Documents\\GitHub\\LAB4-5_174\\data" #directory ka frames
+    stitched_image3 = stitch_images(image5, image6)
+    cv2.imwrite('Seamless Stitch3.jpg', stitched_image3)
 
-    # Empty image array
-    image_paths = []
-
-
-    for filename in os.listdir(image_directory):
-        # Check if the file ends with ".jpg"
-        if filename.endswith(".jpg"):
-             # Get the image path
-            image_path = os.path.join(image_directory, filename)
-            #Append the resized image
-            image_paths.append(cv2.resize(cv2.imread(image_path), (700, 700)))   
-    
-    for i in range(1, len (image_paths)):
-        stitch_image = stitch_images(stitch_image, image_paths[i])
-       
-    
+    final_stitched_image = stitch_images(stitched_image, stitched_image2)
+    final_stitched_image = stitch_images(final_stitched_image, stitched_image3)
+        
     # Write the final stitched image to a file
-    cv2.imwrite("Desktop\Stitched_Panorama.jpg", stitch_image)
+    cv2.imwrite("Banes_Jaronay_lab05_actionshot.jpg", final_stitched_image)
 
 if __name__ == "__main__":
     main()
