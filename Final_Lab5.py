@@ -13,13 +13,13 @@ def find_matches(image1, image2):
 
     # Detect keypoints and compute descriptors for the base and secondary image
     image1_keypoints, image1_descriptors = sift.detectAndCompute(cv2.cvtColor(image1, cv2.COLOR_BGR2GRAY), None)
-    image2_keypoints, image1_descriptors = sift.detectAndCompute(cv2.cvtColor(image2, cv2.COLOR_BGR2GRAY), None)
+    image2_keypoints, image2_descriptors = sift.detectAndCompute(cv2.cvtColor(image2, cv2.COLOR_BGR2GRAY), None)
     
     # Create a Brute-Force Matcher object
     bf_matcher = cv2.BFMatcher()
 
     # Perform K-Nearest Neighbors (KNN) matching
-    Initialmatches = bf_matcher.knnMatch(image1_descriptors, image1_descriptors, k=3)
+    Initialmatches = bf_matcher.knnMatch(image1_descriptors, image2_descriptors, k=3)
 
     # Filter out good matches
     good_matches = []
@@ -36,11 +36,11 @@ def find_homography(matches, image1_keypoints, image2_keypoints):
     #Not sure if may reshape pa or nah
     
     # Extract keypoints list 
-    image1_points = np.float32([image1_keypoints[match[0].queryIdx].pt for match in matches]).reshape(-1, 1, 2)
-    image2_points = np.float32([image2_keypoints[match[0].trainIdx].pt for match in matches]).reshape(-1, 1, 2) 
+    image1_points = np.float32([image1_keypoints[m[0].queryIdx].pt for m in matches])
+    image2_points = np.float32([image2_keypoints[m[0].trainIdx].pt for m in matches])
 
     # Use RANSAC algorithm to estimate the homography 
-    homography, _ = cv2.find_homography(image1_points, image2_points, cv2.RANSAC, 5.0)
+    homography, _ = cv2.findHomography(image2_points, image1_points, cv2.RANSAC, 5.0)
 
     # Return the computed homography  
     return homography
@@ -144,7 +144,7 @@ def stitch_images(image1, image2):
 
 def main():
     # Images directory
-    image_directory = "C:\\Users\\Dnts\\Documents\\GitHub\\LAB4-5_174\\data"
+    image_directory = 'C:\\Users\\User\\Desktop\\KOMSAI\\UP202004905\\4TH_YEAR_NOTES\\2nd_SEM\\CMSC 174 Sec 2\\LAB\\lab05\\data'
 
     # Empty image array
     image_paths = []
@@ -156,19 +156,22 @@ def main():
              # Get the image path
             image_path = os.path.join(image_directory, filename)
             #Append the resized image
-            image_paths.append(cv2.resize(cv2.imread(image_path), (700, 700)))   
+            image_paths.append(cv2.resize(cv2.imread(image_path), (775, 775)))   
     
     # Stitch each image by column
     column1 = image_paths[0]
     column2 = image_paths[1]
     column3 = image_paths[2]
-    for i in range(1, len (image_paths)):
+    for i in range(3, len(image_paths)):
         if (i == 3 or i == 6):
             column1 = stitch_images(column1, image_paths[i])
+            cv2.imwrite("Stitched_Panorama1.jpg", column1)
         elif (i == 4 or i == 7):
             column2 = stitch_images(column2, image_paths[i])
+            cv2.imwrite("Stitched_Panorama2.jpg", column2)
         else:
             column3 = stitch_images(column3, image_paths[i])
+            cv2.imwrite("Stitched_Panorama3.jpg", column3)
     
     # Stitch column 2 and 3
     stitch_image = stitch_images(column2, column3)
@@ -177,7 +180,7 @@ def main():
     final_stitched_image = stitch_images(stitch_image, column1)
     
     # Write the final stitched image to a file
-    cv2.imwrite("Desktop\Stitched_Panorama.jpg", final_stitched_image)
+    cv2.imwrite("Stitched_Panorama4.jpg", final_stitched_image)
 
 if __name__ == "__main__":
     main()
